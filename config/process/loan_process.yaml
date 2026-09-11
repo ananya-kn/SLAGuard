@@ -1,0 +1,64 @@
+process:
+  name: "Loan Application Process"
+  activities:
+    - id: submit_application
+      name: "Submit Application"
+      resources: ["Intake"]
+      default_duration_hours: 0.1
+      
+    - id: check_credit
+      name: "Check Credit"
+      resources: ["Credit Team"]
+      default_duration_hours: 2.0
+      
+    - id: manual_review
+      name: "Manual Review"
+      resources: ["Review Team"]
+      default_duration_hours: 4.0
+      sla_critical: true
+      
+    - id: quality_assurance
+      name: "Quality Assurance"
+      resources: ["QA Team"]
+      default_duration_hours: 1.5
+      
+    - id: approve
+      name: "Approve"
+      resources: ["Approval Team"]
+      default_duration_hours: 0.5
+      
+    - id: reject
+      name: "Reject"
+      resources: ["Approval Team"]
+      default_duration_hours: 0.3
+
+  resource_pools:
+    - id: intake
+      name: "Intake"
+      capacity: 5
+      
+    - id: credit_team
+      name: "Credit Team"
+      capacity: 8
+      
+    - id: review_team
+      name: "Review Team"
+      capacity: 10
+      
+    - id: qa_team
+      name: "QA Team"
+      capacity: 4
+      
+    - id: approval_team
+      name: "Approval Team"
+      capacity: 6
+
+  sla_rules:
+    - tier: "Platinum"
+      max_hours: 24
+    - tier: "Gold"
+      max_hours: 48
+    - tier: "Silver"
+      max_hours: 72
+    - tier: "Bronze"
+      max_hours: 96
