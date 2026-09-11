@@ -1,0 +1,11 @@
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: 'sla-monitor'
+    static_configs:
+      - targets: ['sla-monitor:8002']
+  
+  - job_name: 'simulation-sandbox'
+    static_configs:
+      - targets: ['simulation-sandbox:8003']
