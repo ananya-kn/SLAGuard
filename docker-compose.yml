@@ -1,0 +1,165 @@
+version: '3.8'
+
+services:
+  # ---------------------------------------------------------------------------
+  # INFRASTRUCTURE
+  # ---------------------------------------------------------------------------
+  
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    hostname: zookeeper
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    hostname: kafka
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "29092:29092"
+      - "9093:9093"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9093,PLAINTEXT_HOST://localhost:29092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:23.8
+    container_name: clickhouse
+    ports:
+      - "8123:8123" # HTTP
+      - "9000:9000" # Native
+    volumes:
+      - ./config/clickhouse/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - clickhouse_data:/var/lib/clickhouse
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+
+  flink-jobmanager:
+    image: flink:1.17
+    ports:
+      - "8081:8081"
+    command: jobmanager
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: flink-jobmanager
+
+  flink-taskmanager:
+    image: flink:1.17
+    depends_on:
+      - flink-jobmanager
+    command: taskmanager
+    scale: 1
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: flink-jobmanager
+        taskmanager.numberOfTaskSlots: 2
+
+  # ---------------------------------------------------------------------------
+  # OBSERVABILITY
+  # ---------------------------------------------------------------------------
+
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - ./config/grafana/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml
+      - ./config/grafana/dashboards:/etc/grafana/provisioning/dashboards
+
+  # ---------------------------------------------------------------------------
+  # APPLICATION SERVICES
+  # ---------------------------------------------------------------------------
+
+  data-simulator:
+    build: ./services/data_simulator
+    container_name: data-simulator
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./services/data_simulator:/app
+    depends_on:
+      - kafka
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9093
+
+  inference:
+    build: ./services/inference
+    container_name: inference
+    ports:
+      - "8004:8004"
+    volumes:
+      - ./services/inference:/app
+      - ./weights:/app/weights
+    environment:
+      - MODEL_REGISTRY_PATH=/app/weights/registry.yaml
+
+  sla-monitor:
+    build: ./services/sla_monitor
+    container_name: sla-monitor
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./services/sla_monitor:/app
+    depends_on:
+      - kafka
+      - clickhouse
+      - inference
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9093
+      - CLICKHOUSE_HOST=clickhouse
+      - INFERENCE_URL=http://inference:8004
+
+  simulation-sandbox:
+    build: ./services/simulation_sandbox
+    container_name: simulation-sandbox
+    ports:
+      - "8003:8003"
+    volumes:
+      - ./services/simulation_sandbox:/app
+      - ./config/process:/app/config
+    depends_on:
+      - clickhouse
+      - inference
+    environment:
+      - CLICKHOUSE_HOST=clickhouse
+      - INFERENCE_URL=http://inference:8004
+      - PROCESS_CONFIG=/app/config/loan_process.yaml
+
+  # Demo Dashboard UI
+  demo-dashboard:
+    build:
+      context: ./demo
+    ports:
+      - "8088:8088"
+    depends_on:
+      - inference
+      - sla-monitor
+      - data-simulator
+
+volumes:
+  clickhouse_data:
