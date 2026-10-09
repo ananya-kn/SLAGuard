@@ -1,0 +1,27 @@
+models:
+  duration_predictor:
+    default_version: "xgboost_v1"
+    versions:
+      xgboost_v1:
+        type: xgboost
+        path: xgboost/v1/duration_model.json
+        input_features: ["activity", "customer_tier", "complexity_score", "resource"]
+      lstm_v1:
+        type: lstm
+        path: lstm/v1/duration_model.pt
+        
+  routing_predictor:
+    default_version: "xgboost_v1"
+    versions:
+      xgboost_v1:
+        type: xgboost
+        path: xgboost/v1/routing_model.json
+        input_features: ["activity", "customer_tier", "complexity_score", "region"]
+
+  sla_breach_predictor:
+    default_version: "xgboost_v1"
+    versions:
+      xgboost_v1:
+        type: xgboost
+        path: xgboost/v1/sla_model.json
+        input_features: ["activity", "elapsed_time", "customer_tier", "complexity_score"]
